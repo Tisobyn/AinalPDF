@@ -9,6 +9,7 @@ No account. No upload. No waiting for a server.</p>
   <img alt="iOS 16+" src="https://img.shields.io/badge/iOS-16%2B-0A84FF?logo=apple&logoColor=white">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-blue?logo=swift&logoColor=white">
+  <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow">
   <img alt="Privacy" src="https://img.shields.io/badge/Privacy-100%25%20on%20device-34C759">
 </p>
 
@@ -123,6 +124,10 @@ Needs iOS 16 or later.
 
 - Very complex Word or PowerPoint layouts may look a bit different from the original.
 - Non-Word documents are converted by the system web view, so results can change between iOS versions.
+
+## 📜 License
+
+Free for everyone. Use it, change it, share it, even in your own apps. This project uses the [MIT License](LICENSE).
 
 <div align="center">
 <sub>Made with SwiftUI</sub>
