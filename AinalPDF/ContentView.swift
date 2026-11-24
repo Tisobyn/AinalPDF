@@ -27,6 +27,7 @@ struct ContentView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: Self.importTypes, allowsMultipleSelection: false) { result in
             if case .success(let urls) = result { model.handle(importedURLs: urls) }
         }
+        .onOpenURL { url in model.handle(importedURLs: [url]) }
         .onChange(of: photoItems) { items in
             model.handle(photos: items)
             photoItems = []
