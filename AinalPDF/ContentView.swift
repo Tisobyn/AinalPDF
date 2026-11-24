@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
 
-    private let formats = ["Word", "PowerPoint", "Excel", "Pages", "Keynote", "Numbers", "RTF", "TXT", "CSV", "Photos"]
+    private let formats = ["Word", "PowerPoint", "Excel", "Pages", "Keynote", "Numbers", "RTF", "TXT", "CSV", "Markdown", "JSON", "XML", "HTML", "SVG", "Photos"]
 
     var body: some View {
         NavigationStack {
@@ -63,6 +63,11 @@ struct ContentView: View {
 
     private var actions: some View {
         VStack(spacing: 12) {
+            Picker("Page size", selection: $model.page) {
+                ForEach(PageOption.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
             Button { showImporter = true } label: {
                 bigButtonLabel("Choose a file", icon: "folder.fill")
             }
@@ -151,13 +156,15 @@ struct ContentView: View {
     }
 
     private static let importTypes: [UTType] = {
-        var types: [UTType] = [.pdf, .image, .rtf, .plainText, .commaSeparatedText, .svg]
+        var types: [UTType] = [.pdf, .image, .rtf, .plainText, .commaSeparatedText, .tabSeparatedText, .svg, .html, .json, .xml, .yaml, .log]
         let ids = [
             "com.microsoft.word.doc", "org.openxmlformats.wordprocessingml.document",
             "org.openxmlformats.presentationml.presentation", "org.openxmlformats.spreadsheetml.sheet",
             "com.apple.iwork.pages.pages", "com.apple.iwork.pages.sffpages",
             "com.apple.iwork.keynote.key", "com.apple.iwork.keynote.sffkey",
-            "com.apple.iwork.numbers.numbers", "com.apple.iwork.numbers.sffnumbers"
+            "com.apple.iwork.numbers.numbers", "com.apple.iwork.numbers.sffnumbers",
+            "com.microsoft.excel.xls", "com.microsoft.powerpoint.ppt", "com.microsoft.powerpoint.ppt.slideshow",
+            "org.openxmlformats.presentationml.slideshow", "net.daringfireball.markdown"
         ]
         types += ids.compactMap { UTType($0) }
         return types

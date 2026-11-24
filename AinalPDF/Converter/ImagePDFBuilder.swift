@@ -1,19 +1,19 @@
 import PDFKit
 import UIKit
 
-/// Puts pictures on A4 pages. One picture = one page. Wide pictures get a landscape page.
+/// Puts pictures on pages (A4, Letter or the picture size). One picture = one page. Wide pictures get a landscape page.
 enum ImagePDFBuilder {
 
-    static func makePDF(from images: [UIImage]) -> PDFDocument? {
+    static func makePDF(from images: [UIImage], page: PageOption = .a4) -> PDFDocument? {
         guard !images.isEmpty else { return nil }
         let margin: CGFloat = 24
         let merged = PDFDocument()
 
         for image in images {
             let isWide = image.size.width > image.size.height
-            let sheet = isWide
-                ? CGSize(width: PageSize.a4Height, height: PageSize.a4Width)
-                : CGSize(width: PageSize.a4Width, height: PageSize.a4Height)
+            // "Original size": the page is the picture itself, with no margin.
+            let margin: CGFloat = page == .original ? 0 : margin
+            let sheet = page == .original ? image.size : (isWide ? page.landscape : page.portrait)
             let data = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: sheet)).pdfData { context in
                 context.beginPage()
                 let area = CGSize(width: sheet.width - 2 * margin, height: sheet.height - 2 * margin)

@@ -22,6 +22,9 @@ final class ConverterViewModel: ObservableObject {
     @Published var state: ConvertState = .idle
     @Published var result: ConvertedFile?
     @Published var history: [ConvertedFile] = []
+    @Published var page: PageOption = PageOption(rawValue: UserDefaults.standard.string(forKey: "pageOption") ?? "") ?? .a4 {
+        didSet { UserDefaults.standard.set(page.rawValue, forKey: "pageOption") }
+    }
 
     private let folder: URL = {
         let url = URL.documentsDirectory.appendingPathComponent("Converted", isDirectory: true)
@@ -55,13 +58,15 @@ final class ConverterViewModel: ObservableObject {
         }
         if access { url.stopAccessingSecurityScopedResource() }
 
+        let page = self.page
         run(name: url.deletingPathExtension().lastPathComponent, label: url.lastPathComponent) {
-            try await DocumentConverter.convert(fileURL: copy)
+            try await DocumentConverter.convert(fileURL: copy, page: page)
         }
     }
 
     func handle(photos items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        let page = self.page
         run(name: "Photos", label: items.count == 1 ? "1 photo" : "\(items.count) photos") {
             var images: [UIImage] = []
             for item in items {
@@ -70,7 +75,7 @@ final class ConverterViewModel: ObservableObject {
                 }
             }
             guard !images.isEmpty else { throw ConversionFailure.unreadable }
-            return try DocumentConverter.convert(images: images)
+            return try DocumentConverter.convert(images: images, page: page)
         }
     }
 

@@ -25,10 +25,14 @@ enum WebDocumentPDFExporter {
         case document
     }
 
-    private static let portrait = CGSize(width: PageSize.a4Width, height: PageSize.a4Height)
-    private static let landscape = CGSize(width: PageSize.a4Height, height: PageSize.a4Width)
+    // Set at the start of each export. Only one conversion runs at a time, on the main actor.
+    private static var portrait = PageOption.a4.portrait
+    private static var landscape = PageOption.a4.landscape
 
-    static func export(from webView: WKWebView, fileExtension: FileNameExtensions?) async -> PDFDocument? {
+    /// `page`: A4 or Letter. "Original size" has no meaning for these formats, so they use A4.
+    static func export(from webView: WKWebView, fileExtension: FileNameExtensions?, page: PageOption = .a4) async -> PDFDocument? {
+        portrait = page.portrait
+        landscape = page.landscape
         let kind = await detectKind(webView, fileExtension: fileExtension)
         log("WebDocumentPDFExporter: \(kind)")
 

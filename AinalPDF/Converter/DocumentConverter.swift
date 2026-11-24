@@ -6,8 +6,12 @@ import WebKit
 enum SourceKind {
     case pdf, image, docx, web
 
-    static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "tif", "tiff", "gif", "bmp", "webp"]
-    static let webExtensions: Set<String> = ["doc", "pptx", "xlsx", "pages", "numbers", "key", "rtf", "csv", "txt", "svg", "html", "htm"]
+    static let imageExtensions: Set<String> = ["jpg", "jpeg", "jfif", "png", "heic", "heif", "tif", "tiff", "gif", "bmp", "webp", "ico", "dng"]
+    static let webExtensions: Set<String> = [
+        "doc", "dot", "ppt", "pps", "pptx", "ppsx", "xls", "xlsx", "pages", "numbers", "key",
+        "rtf", "csv", "tsv", "txt", "md", "markdown", "log", "json", "xml", "yaml", "yml",
+        "svg", "html", "htm",
+    ]
 
     init?(extension ext: String) {
         let ext = ext.lowercased()
@@ -37,7 +41,7 @@ enum ConversionFailure: LocalizedError {
 @MainActor
 enum DocumentConverter {
 
-    static func convert(fileURL: URL) async throws -> PDFDocument {
+    static func convert(fileURL: URL, page: PageOption = .a4) async throws -> PDFDocument {
         let ext = fileURL.pathExtension
         guard let kind = SourceKind(extension: ext) else { throw ConversionFailure.unsupported(ext) }
 
@@ -48,7 +52,7 @@ enum DocumentConverter {
 
         case .image:
             guard let data = try? Data(contentsOf: fileURL), let image = UIImage(data: data),
-                  let pdf = ImagePDFBuilder.makePDF(from: [image]) else { throw ConversionFailure.unreadable }
+                  let pdf = ImagePDFBuilder.makePDF(from: [image], page: page) else { throw ConversionFailure.unreadable }
             return pdf
 
         case .docx:
@@ -56,21 +60,21 @@ enum DocumentConverter {
                 return try await DocxPDFConverter().convert(fileURL: fileURL)
             } catch {
                 log("docx renderer failed (\(error)), trying WebKit")
-                return try await convertWithWebKit(fileURL: fileURL, ext: ext)
+                return try await convertWithWebKit(fileURL: fileURL, ext: ext, page: page)
             }
 
         case .web:
-            return try await convertWithWebKit(fileURL: fileURL, ext: ext)
+            return try await convertWithWebKit(fileURL: fileURL, ext: ext, page: page)
         }
     }
 
-    static func convert(images: [UIImage]) throws -> PDFDocument {
-        guard let pdf = ImagePDFBuilder.makePDF(from: images) else { throw ConversionFailure.failed }
+    static func convert(images: [UIImage], page: PageOption = .a4) throws -> PDFDocument {
+        guard let pdf = ImagePDFBuilder.makePDF(from: images, page: page) else { throw ConversionFailure.failed }
         return pdf
     }
 
-    private static func convertWithWebKit(fileURL: URL, ext: String) async throws -> PDFDocument {
-        guard let pdf = await WebFileConverter().convert(fileURL: fileURL, ext: ext) else { throw ConversionFailure.failed }
+    private static func convertWithWebKit(fileURL: URL, ext: String, page: PageOption) async throws -> PDFDocument {
+        guard let pdf = await WebFileConverter().convert(fileURL: fileURL, ext: ext, page: page) else { throw ConversionFailure.failed }
         return pdf
     }
 }
@@ -82,7 +86,7 @@ final class WebFileConverter: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
     private var continuation: CheckedContinuation<Bool, Never>?
 
-    func convert(fileURL: URL, ext: String) async -> PDFDocument? {
+    func convert(fileURL: URL, ext: String, page: PageOption) async -> PDFDocument? {
         let view = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         // WebKit only prints views that sit in a window, so keep it there but invisible.
         view.alpha = 0.01
@@ -97,7 +101,7 @@ final class WebFileConverter: NSObject, WKNavigationDelegate {
 
         let loaded = await load(fileURL, in: view)
         guard loaded else { return nil }
-        return await WebDocumentPDFExporter.export(from: view, fileExtension: FileNameExtensions(from: ext))
+        return await WebDocumentPDFExporter.export(from: view, fileExtension: FileNameExtensions(from: ext), page: page)
     }
 
     private func load(_ url: URL, in view: WKWebView) async -> Bool {
@@ -135,9 +139,9 @@ enum FileNameExtensions {
 
     init(from ext: String) {
         switch ext.lowercased() {
-        case "xlsx": self = .xlsx
-        case "csv": self = .csv
-        case "txt": self = .txt
+        case "xlsx", "xls": self = .xlsx
+        case "csv", "tsv": self = .csv
+        case "txt", "md", "markdown", "log", "json", "xml", "yaml", "yml": self = .txt
         case "rtf": self = .rtf
         default: self = .other
         }
