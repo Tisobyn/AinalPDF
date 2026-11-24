@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* iOS WebKit inflates text on "mobile" pages, which reflows the document and changes page breaks. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #e5e7eb; }
+  /* Export mode: flat white pages, no gaps, so each page rect maps 1:1 onto a PDF page. */
+  body.export { background: #fff; }
+  body.export .docx-wrapper { background: #fff !important; padding: 0 !important; }
+  body.export .docx-wrapper > section.docx { box-shadow: none !important; margin: 0 !important; }
+</style>
+</head>
+<body>
+<div id="c"></div>
+<script src="jszip.min.js"></script>
+<script src="docx-preview.min.js"></script>
+<script>
+  // docx-preview only starts a new page at explicit page-break markers, so a document without
+  // them (Google Docs exports, generated files, ...) ends up as one very tall "page".
+  // These helpers paginate it ourselves so every section is exactly one page.
+  const FALLBACK_PAGE = { w: 794, h: 1123, pad: 96 }; // A4 @96dpi, 1in margins
+
+  // docx-preview writes sizes in pt, so always read the computed (px) value.
+  function pageHeight(sec) { return parseFloat(getComputedStyle(sec).minHeight) || 0; }
+
+  function ensurePageBox(sec) {
+    sec.style.boxSizing = "border-box";
+    if (!pageHeight(sec)) {
+      // The docx carries no page size: treat it as an A4 page.
+      sec.style.width = FALLBACK_PAGE.w + "px";
+      sec.style.minHeight = FALLBACK_PAGE.h + "px";
+      sec.style.padding = FALLBACK_PAGE.pad + "px";
+    }
+  }
+
+  // Moves the blocks that overflow `sec` onto a new section placed right after it, then repeats.
+  function splitSection(sec) {
+    const article = sec.querySelector(":scope > article");
+    if (!article) return;
+    const cs = getComputedStyle(sec);
+    const header = sec.querySelector(":scope > header");
+    const footer = sec.querySelector(":scope > footer");
+    const available = pageHeight(sec)
+      - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+      - (header ? header.offsetHeight : 0) - (footer ? footer.offsetHeight : 0);
+
+    const top = article.getBoundingClientRect().top;
+    const blocks = [...article.children];
+    const bottomOf = b => b.getBoundingClientRect().bottom + parseFloat(getComputedStyle(b).marginBottom) - top;
+    const first = blocks.findIndex(b => bottomOf(b) > available + 1);
+    if (first <= 0) return; // everything fits, or one block alone is taller than a page
+
+    const next = sec.cloneNode(false);
+    const nextArticle = article.cloneNode(false);
+    if (header) next.appendChild(header.cloneNode(true));
+    next.appendChild(nextArticle);
+    if (footer) next.appendChild(footer.cloneNode(true));
+    blocks.slice(first).forEach(b => nextArticle.appendChild(b));
+    sec.after(next);
+    splitSection(next);
+  }
+
+  function paginate() {
+    const sections = [...document.querySelectorAll("section.docx")];
+    sections.forEach(ensurePageBox);
+    sections.forEach(splitSection);
+  }
+
+  // Word writes list bullets as private-use characters of the Symbol / Wingdings fonts, which iOS does not have
+  // (they show up as empty boxes). Swap them for the real Unicode bullets.
+  const BULLETS = { "": "•", "": "▪", "": "➢", "": "✓", "": "❖", "": "□" };
+
+  function fixSymbolBullets() {
+    document.querySelectorAll("style").forEach(style => {
+      const css = style.textContent;
+      if (!/[-]/.test(css)) return;
+      style.textContent = css
+        .replace(/[-]/g, c => BULLETS[c] || "•")
+        .replace(/font-family:\s*(Symbol|Wingdings[\w\s]*)\s*;/gi, "font-family: inherit;");
+    });
+  }
+
+  /**
+   * Renders a base64 docx into #c.
+   * mode "export": flat pages, returns the page rects in document coordinates.
+   * mode "view":   on-screen look, scaled down to fit the viewport width.
+   */
+  window.renderDocx = async function (b64, mode) {
+    if (mode === "export") document.body.classList.add("export");
+
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    await docx.renderAsync(bytes, document.getElementById("c"), null, {
+      className: "docx",
+      inWrapper: true,
+      breakPages: true,
+      ignoreLastRenderedPageBreak: false,
+      renderHeaders: true,
+      renderFooters: true,
+      renderFootnotes: true,
+      renderEndnotes: true,
+      useBase64URL: true
+    });
+
+    fixSymbolBullets();
+
+    // Fonts and images must be ready before anything is measured or exported.
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+
+    if (document.querySelectorAll("section.docx").length === 0) throw new Error("no pages rendered");
+    paginate();
+    const pages = [...document.querySelectorAll("section.docx")];
+
+    if (mode === "view") {
+      const widest = Math.max(...pages.map(p => p.getBoundingClientRect().width));
+      const scale = window.innerWidth / (widest + 16);
+      if (scale < 1) document.body.style.zoom = scale;
+      return [];
+    }
+
+    // One rect per page. A single block taller than a page still overflows its section,
+    // so such a section is cut into page-height slices as a last resort.
+    const rects = [];
+    for (const s of pages) {
+      const r = s.getBoundingClientRect();
+      const pageH = pageHeight(s) || r.height;
+      // 24px of tolerance so a few px of spill-over (margins) don't create an extra page.
+      const count = Math.max(1, Math.ceil((r.height - 24) / pageH));
+      for (let i = 0; i < count; i++) {
+        rects.push({
+          x: r.left + scrollX,
+          y: r.top + scrollY + i * pageH,
+          w: r.width,
+          h: Math.min(pageH, r.height - i * pageH)
+        });
+      }
+    }
+    return rects;
+  };
+</script>
+</body>
+</html>
